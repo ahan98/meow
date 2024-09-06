@@ -85,7 +85,9 @@
 
 (defun meow-keypad--get-input ()
   (thread-first
-    (mapcar #'meow--keypad-format-key-1 meow--keypad-keys)
+    (or (mapcar #'meow--keypad-format-key-1 meow--keypad-keys)
+        (and (stringp meow-keypad-leader-dispatch)
+             (list meow-keypad-leader-dispatch)))
     (reverse)
     (string-join " ")))
 
@@ -171,7 +173,6 @@
 Leader keymap may contain meow-dispatch commands translated names based on the
 commands they refer to."
   (when-let ((keymap (meow-keypad--get-leader-map)))
-    ;; (print "making leader map")
     (let ((km (make-keymap)))
       (suppress-keymap km t)
       (map-keymap
@@ -187,7 +188,6 @@ commands they refer to."
 
 (defun meow-keypad--get-nested-map-for-describe (input)
   (when-let ((keymap (meow--keypad-lookup-key (read-kbd-macro input))))
-    ;; (print "making nested map")
     (when (keymapp keymap)
       (let* ((km (make-keymap))
              (has-sub-meta (meow--keypad-has-sub-meta-keymap-p))

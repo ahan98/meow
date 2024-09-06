@@ -278,11 +278,14 @@ Argument ENABLE non-nil means turn on."
 
 (defvar meow--which-key-setup nil)
 
+(defun meow--which-key-default-function (keymap)
+  (which-key--create-buffer-and-show
+   nil keymap nil (concat "Meow: " (meow--keypad-format-keys))))
+
 (defun meow--which-key-describe-keymap ()
   (if which-key-mode
       (setq meow-keypad-describe-keymap-function
-	(lambda (keymap)
-	  (which-key--create-buffer-and-show nil keymap nil (concat "Meow: " (meow--keypad-format-keys)))))
+            #'meow--which-key-default-function)
     (setq meow-keypad-describe-keymap-function 'meow-describe-keymap)))
 
 (defun meow--setup-which-key (enable)
