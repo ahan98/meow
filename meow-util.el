@@ -263,7 +263,7 @@ Looks up the state in meow-replace-state-name-list"
   (if (<= len (length s))
       s
     (if start
-	(concat (make-string (- len (length s)) pad) s)
+  (concat (make-string (- len (length s)) pad) s)
       (concat s (make-string (- len (length s)) pad)))))
 
 (defun meow--truncate-string (len s ellipsis)

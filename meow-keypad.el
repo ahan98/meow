@@ -155,8 +155,10 @@
 (defun meow-keypad--get-leader-map ()
   (if (stringp meow-keypad-leader-dispatch)
       (meow--keypad-lookup-key (read-kbd-macro meow-keypad-leader-dispatch))
-    (or meow-keypad-leader-dispatch
-        (alist-get 'leader meow-keymap-alist))))
+    (meow--get-leader-keymap)
+    ;; (or meow-keypad-leader-dispatch
+    ;;     (alist-get 'leader meow-keymap-alist))
+    ))
 
 (defun meow-keypad--leader-p (&optional input)
   (or (null meow--keypad-keys)
