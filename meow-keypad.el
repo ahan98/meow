@@ -93,6 +93,7 @@
 
 (defun meow--keypad-format-keys (&optional prompt)
   "Return a display format for current input keys."
+  ;; (print "formatting keypad")
   (let ((result ""))
     (setq result (meow-keypad--get-input))
     (cond
@@ -152,14 +153,6 @@
       (define-key km (vector (meow--get-event-key key))
                   (funcall meow-keypad-get-title-function def)))))
 
-(defun meow-keypad--get-leader-map ()
-  (if (stringp meow-keypad-leader-dispatch)
-      (meow--keypad-lookup-key (read-kbd-macro meow-keypad-leader-dispatch))
-    (meow--get-leader-keymap)
-    ;; (or meow-keypad-leader-dispatch
-    ;;     (alist-get 'leader meow-keymap-alist))
-    ))
-
 (defun meow-keypad--leader-p (&optional input)
   (or (null meow--keypad-keys)
       (and (stringp meow-keypad-leader-dispatch)
@@ -177,7 +170,12 @@
 
 Leader keymap may contain meow-dispatch commands translated names based on the
 commands they refer to."
-  (when-let ((keymap (meow-keypad--get-leader-map)))
+  ;; (setq meow--keypad-keys nil)
+  (print meow--keypad-keys)
+  (when-let ((keymap (if (stringp meow-keypad-leader-dispatch)
+                         (meow--keypad-lookup-key
+                          (read-kbd-macro meow-keypad-leader-dispatch))
+                       (meow--get-leader-keymap))))
     (let ((km (make-keymap)))
       (suppress-keymap km t)
       (map-keymap
@@ -192,6 +190,8 @@ commands they refer to."
       km)))
 
 (defun meow-keypad--get-nested-map-for-describe (input)
+  ;; (push (cons 'literal key) meow--keypad-keys)
+  ;; (setq meow--use-literal t)
   (when-let ((keymap (meow--keypad-lookup-key (read-kbd-macro input))))
     (when (keymapp keymap)
       (let* ((km (make-keymap))
@@ -238,13 +238,12 @@ commands they refer to."
         (when (keymapp keymap)
           (meow--make-keymap-for-describe keymap nil))))
 
-     ((meow-keypad--leader-p input)
+     (;; (meow-keypad--leader-p input)
+      (null meow--keypad-keys)
       (meow-keypad--get-leader-map-for-describe))
 
      (t
       (meow-keypad--get-nested-map-for-describe input)))))
-
-
 
 (defun meow--keypad-display-message ()
   (let (overriding-local-map)
@@ -309,7 +308,6 @@ commands they refer to."
       (propertize "Frame is too narrow for KEYPAD popup" 'face 'meow-keypad-cannot-display))))
 
 
-
 (defun meow-describe-keymap (keymap)
   (when (and keymap (not defining-kbd-macro) (not meow--keypad-help))
     (let* ((rst))
@@ -365,6 +363,7 @@ Returning DEF will result in a generated title."
   "Pop the last input."
   (interactive)
   ;; (print "keypad undo")
+  (message "before keypad undo, current input: %s" meow--keypad-keys)
   (setq this-command last-command)
   (let (meow--use-p)
     (dolist (sym '(meow--use-both meow--use-meta meow--use-literal))
@@ -382,6 +381,8 @@ Returning DEF will result in a generated title."
           (meow--keypad-quit))
       (unless meow--use-p
         (pop meow--keypad-keys))
+      ;; (when (meow-keypad--leader-p)
+      ;;   (setq meow--keypad-keys nil))
       (meow--update-indicator)
       (meow--keypad-display-message))))
 
@@ -450,6 +451,7 @@ try replacing the last modifier and try again."
        ((and (equal e meow-keypad-meta-prefix)
              (not meow--use-meta)
              has-sub-meta)
+        ;; (print "next input will be prefixed with M-")
         (setq meow--use-meta t))
        ((and (equal e meow-keypad-ctrl-meta-prefix)
              (not meow--use-both)
@@ -457,20 +459,35 @@ try replacing the last modifier and try again."
         (setq meow--use-both t))
        ((and (equal e meow-keypad-literal-prefix)
              (not meow--use-literal)
-             meow--keypad-keys)
+             ;; meow--keypad-keys
+             (or meow--keypad-keys
+                 (meow-keypad--leader-p)))
+        ;; (message "setting literal flag")
         (setq meow--use-literal t))
-       (meow--keypad-keys
+       (;; (and meow--keypad-keys
+        ;;      (not (meow-keypad--leader-p)))
+        meow--keypad-keys
+        ;; (message "prepending keypad keys %s and input %s"
+        ;;          meow--keypad-keys (meow-keypad--get-input))
         (push (cons 'control key) meow--keypad-keys))
        ((alist-get e meow-keypad-start-keys)
+        ;; (message "alist-get start key = %s" (alist-get e meow-keypad-start-keys))
+        ;; (message "prepending %s" (cons 'control (meow--parse-input-event
+        ;;                       (alist-get e meow-keypad-start-keys))))
         (push (cons 'control (meow--parse-input-event
                               (alist-get e meow-keypad-start-keys)))
               meow--keypad-keys))
        (meow--keypad-allow-quick-dispatch
         (if-let ((keymap (meow--get-leader-keymap)))
             (setq meow--keypad-base-keymap keymap)
-          (setq meow--keypad-keys (meow--parse-string-to-keypad-keys meow-keypad-leader-dispatch)))
+          (setq meow--keypad-keys (meow--parse-string-to-keypad-keys
+                                   meow-keypad-leader-dispatch))
+          ;; (message "meow--keypad-keys: %s" meow--keypad-keys)
+          )
+        ;; (message "prepending literal for quick dispatch")
         (push (cons 'literal key) meow--keypad-keys))
        (t
+        ;; (print "prepending C-c")
         (push (cons 'control key) meow--keypad-keys))))
 
     ;; Try execute if the input is valid.

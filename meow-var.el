@@ -314,6 +314,18 @@ prompted to finish the command."
   :type '(alist :key-type (character :tag "From")
                 :value-type (character :tag "To")))
 
+;; (defcustom meow-keypad-default-modifier nil
+;;   "Specifies the default modifier prefix for each keypad input. The default is
+;; to prefer C-* (ctrl) keybindings. Otherwise, if non-nil, meow-keypad-*-prefix is
+;; implicitly prepended to the next input. For example, if
+;; `meow-keypad-default-modifier' is 'literal, \"o\" will be preferred over
+;; \"C-o\". See `meow-keypad-self-insert' for details."
+;;   :group 'meow
+;;   :type '(choice (symbol :tag "Prefer M-* keybindings" meta)
+;;                  (symbol :tag "Prefer C-M-* keybindings" both)
+;;                  (symbol :tag "Prefer literal keybindings" literal)
+;;                  (const :tag "Prefer C-* keybindings" nil)))
+
 (defcustom meow-motion-remap-prefix "H-"
   "The prefix string used when remapping an occupied key in MOTION state.
 
