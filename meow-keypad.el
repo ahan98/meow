@@ -158,10 +158,13 @@
     (or meow-keypad-leader-dispatch
         (alist-get 'leader meow-keymap-alist))))
 
-(defun meow-keypad--leader-p (input)
-  (or (string-empty-p input)
+(defun meow-keypad--leader-p (&optional input)
+  (or (null meow--keypad-keys)
       (and (stringp meow-keypad-leader-dispatch)
-           (string= input meow-keypad-leader-dispatch))))
+           (string= meow-keypad-leader-dispatch
+                    (if (stringp input)
+                        input
+                      (meow-keypad--get-input))))))
 
 (defun meow-keypad--get-leader-map-for-describe ()
   "For leader popup meow-keypad-leader-dispatch can be string, keymap or nil:
@@ -214,6 +217,7 @@ commands they refer to."
         km))))
 
 (defun meow--keypad-get-keymap-for-describe ()
+  ;; (print "getting keymap for describe")
   (let* ((input (meow-keypad--get-input))
          (meta-both-keymap (meow--keypad-lookup-key
                             (read-kbd-macro
@@ -358,23 +362,26 @@ Returning DEF will result in a generated title."
 (defun meow-keypad-undo ()
   "Pop the last input."
   (interactive)
+  ;; (print "keypad undo")
   (setq this-command last-command)
-  (cond
-   (meow--use-both
-    (setq meow--use-both nil))
-   (meow--use-literal
-    (setq meow--use-literal nil))
-   (meow--use-meta
-    (setq meow--use-meta nil))
-   (t
-    (pop meow--keypad-keys)))
-  (if meow--keypad-keys
-      (progn
-        (meow--update-indicator)
-        (meow--keypad-display-message))
-    (when meow-keypad-message
-      (message "KEYPAD exit"))
-    (meow--keypad-quit)))
+  (let (meow--use-p)
+    (dolist (sym '(meow--use-both meow--use-meta meow--use-literal))
+      (when (symbol-value sym)
+        ;; (message "input when did use: %s" meow--keypad-keys)
+        (set sym nil)
+        (setq meow--use-p t)))
+
+    (if (and (not meow--use-p)
+             (meow-keypad--leader-p))
+        (progn
+          ;; (message "input before quit: %s" meow--keypad-keys)
+          (when meow-keypad-message
+            (message "KEYPAD exit"))
+          (meow--keypad-quit))
+      (unless meow--use-p
+        (pop meow--keypad-keys))
+      (meow--update-indicator)
+      (meow--keypad-display-message))))
 
 (defun meow--keypad-show-message ()
   (let ((message-log-max))
