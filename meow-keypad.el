@@ -83,14 +83,16 @@
              (and (keymapp keymap)
                   (lookup-key keymap ""))))))
 
+(defun meow-keypad--get-input ()
+  (thread-first
+    (mapcar #'meow--keypad-format-key-1 meow--keypad-keys)
+    (reverse)
+    (string-join " ")))
+
 (defun meow--keypad-format-keys (&optional prompt)
   "Return a display format for current input keys."
   (let ((result ""))
-    (setq result
-          (thread-first
-              (mapcar #'meow--keypad-format-key-1 meow--keypad-keys)
-            (reverse)
-            (string-join " ")))
+    (setq result (meow-keypad--get-input))
     (cond
      (meow--use-both
       (setq result
@@ -141,11 +143,78 @@
        keymap))
     km))
 
+
+(defun meow-keypad--define-key (km key def)
+  (let ((k (vector (meow--get-event-key key))))
+    (unless (lookup-key km k)
+      (define-key km (vector (meow--get-event-key key))
+                  (funcall meow-keypad-get-title-function def)))))
+
+(defun meow-keypad--get-leader-map ()
+  (if (stringp meow-keypad-leader-dispatch)
+      (meow--keypad-lookup-key (read-kbd-macro meow-keypad-leader-dispatch))
+    (or meow-keypad-leader-dispatch
+        (alist-get 'leader meow-keymap-alist))))
+
+(defun meow-keypad--leader-p (input)
+  (or (string-empty-p input)
+      (and (stringp meow-keypad-leader-dispatch)
+           (string= input meow-keypad-leader-dispatch))))
+
+(defun meow-keypad--get-leader-map-for-describe ()
+  "For leader popup meow-keypad-leader-dispatch can be string, keymap or nil:
+
+- string, dynamically find the keymap
+- keymap, just use it
+- nil, take the one in meow-keymap-alist
+
+Leader keymap may contain meow-dispatch commands translated names based on the
+commands they refer to."
+  (when-let ((keymap (meow-keypad--get-leader-map)))
+    ;; (print "making leader map")
+    (let ((km (make-keymap)))
+      (suppress-keymap km t)
+      (map-keymap
+       (lambda (key def)
+         (when (and (not (member 'control (event-modifiers key)))
+                    (not (member key (list meow-keypad-meta-prefix
+                                           meow-keypad-ctrl-meta-prefix
+                                           meow-keypad-literal-prefix)))
+                    (not (alist-get key meow-keypad-start-keys)))
+           (meow-keypad--define-key km key def)))
+       keymap)
+      km)))
+
+(defun meow-keypad--get-nested-map-for-describe (input)
+  (when-let ((keymap (meow--keypad-lookup-key (read-kbd-macro input))))
+    ;; (print "making nested map")
+    (when (keymapp keymap)
+      (let* ((km (make-keymap))
+             (has-sub-meta (meow--keypad-has-sub-meta-keymap-p))
+             (ignores (if has-sub-meta
+                          (list meow-keypad-meta-prefix
+                                meow-keypad-ctrl-meta-prefix
+                                meow-keypad-literal-prefix
+                                127)
+                        (list meow-keypad-literal-prefix 127))))
+        (suppress-keymap km t)
+        (map-keymap
+         (lambda (key def)
+           (when (member 'control (event-modifiers key))
+             (unless (member (meow--event-key key) ignores)
+               (when def
+                 (meow-keypad--define-key km key def)))))
+         keymap)
+        (map-keymap
+         (lambda (key def)
+           (unless (member 'control (event-modifiers key))
+             (unless (member key ignores)
+               (meow-keypad--define-key km key def))))
+         keymap)
+        km))))
+
 (defun meow--keypad-get-keymap-for-describe ()
-  (let* ((input (thread-first
-                  (mapcar #'meow--keypad-format-key-1 meow--keypad-keys)
-                  (reverse)
-                  (string-join " ")))
+  (let* ((input (meow-keypad--get-input))
          (meta-both-keymap (meow--keypad-lookup-key
                             (read-kbd-macro
                              (if (string-blank-p input)
@@ -163,63 +232,13 @@
         (when (keymapp keymap)
           (meow--make-keymap-for-describe keymap nil))))
 
-     ;; For leader popup
-     ;; meow-keypad-leader-dispatch can be string, keymap or nil
-     ;; - string, dynamically find the keymap
-     ;; - keymap, just use it
-     ;; - nil, take the one in meow-keymap-alist
-     ;; Leader keymap may contain meow-dispatch commands
-     ;; translated names based on the commands they refer to
-     ((null meow--keypad-keys)
-      (when-let ((keymap (if (stringp meow-keypad-leader-dispatch)
-                             (meow--keypad-lookup-key (read-kbd-macro meow-keypad-leader-dispatch))
-                           (or meow-keypad-leader-dispatch
-                               (alist-get 'leader meow-keymap-alist)))))
-        (let ((km (make-keymap)))
-          (suppress-keymap km t)
-          (map-keymap
-           (lambda (key def)
-             (when (and (not (member 'control (event-modifiers key)))
-                        (not (member key (list meow-keypad-meta-prefix
-                                               meow-keypad-ctrl-meta-prefix
-                                               meow-keypad-literal-prefix)))
-                        (not (alist-get key meow-keypad-start-keys)))
-               (let ((keys (vector (meow--get-event-key key))))
-                 (unless (lookup-key km keys)
-                   (define-key km keys (funcall meow-keypad-get-title-function def))))))
-           keymap)
-          km)))
+     ((meow-keypad--leader-p input)
+      (meow-keypad--get-leader-map-for-describe))
 
      (t
-      (when-let ((keymap (meow--keypad-lookup-key (read-kbd-macro input))))
-        (when (keymapp keymap)
-          (let* ((km (make-keymap))
-                 (has-sub-meta (meow--keypad-has-sub-meta-keymap-p))
-                 (ignores (if has-sub-meta
-                              (list meow-keypad-meta-prefix
-                                    meow-keypad-ctrl-meta-prefix
-                                    meow-keypad-literal-prefix
-                                    127)
-                            (list meow-keypad-literal-prefix 127))))
-            (suppress-keymap km t)
-            (map-keymap
-             (lambda (key def)
-               (when (member 'control (event-modifiers key))
-                 (unless (member (meow--event-key key) ignores)
-                   (when def
-                     (let ((k (vector (meow--get-event-key key))))
-                       (unless (lookup-key km k)
-                         (define-key km k (funcall meow-keypad-get-title-function def))))))))
-             keymap)
-            (map-keymap
-             (lambda (key def)
-               (unless (member 'control (event-modifiers key))
-                 (unless (member key ignores)
-                   (let ((k (vector (meow--get-event-key key))))
-                     (unless (lookup-key km k)
-                       (define-key km (vector (meow--get-event-key key)) (funcall meow-keypad-get-title-function def)))))))
-             keymap)
-            km)))))))
+      (meow-keypad--get-nested-map-for-describe input)))))
+
+
 
 (defun meow--keypad-display-message ()
   (let (overriding-local-map)
